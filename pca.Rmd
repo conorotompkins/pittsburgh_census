@@ -8,7 +8,7 @@ runtime: shiny
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
-                      message = FALSE)
+                      message = FALSE, warning = FALSE)
 ```
 
 ```{r}
@@ -22,37 +22,83 @@ options(tigris_use_cache = TRUE)
 census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 
 theme_set(theme_minimal())
-theme_minimal()
 
 census_vars <- load_variables(2010, "sf1", cache = TRUE)
 ```
 
 ```{r}
-vars <- c(white = "P0050003", 
+vars_demo <- c(white = "P0050003", 
           black = "P0050004", 
           asian = "P0050006", 
-          hispanic = "P0040003",
-          units_owned_loan = "H0110002",
-          units_owned_entire = "H0110003",
-          units_rented = "H0110004")
+          hispanic = "P0040003")
 #age vars men and women
 #P0120003:P0120049
 
-allegheny_data <- get_decennial(geography = "tract", 
-                           variables = vars,
+get_decennial(geography = "tract", 
+                           variables = vars_demo,
                            state = "PA", 
                            county = "Allegheny", 
-                           geometry = FALSE)
-
-allegheny_data %>%
+                           geometry = FALSE,
+                           summary_var = "P0010001") %>% 
+  arrange(GEOID) %>% 
+  mutate(value = value / summary_value) %>% 
+  select(-summary_value) %>% 
   spread(variable, value) %>% 
-  select(-GEOID) %>% 
-  remove_rownames() %>% 
-  column_to_rownames(var = "NAME") -> allegheny_data_pca
+  rename_at(vars("white", "black", "asian", "hispanic"), funs(str_c("percent_", .))) -> allegheny_demographics
+
+allegheny_demographics <- replace(allegheny_demographics, is.na(allegheny_demographics), 0)
+
+vars_housing <- c(units_owned_loan = "H0110002",
+          units_owned_entire = "H0110003",
+          units_rented = "H0110004")
+
+get_decennial(geography = "tract", 
+                           variables = vars_housing,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = FALSE,
+                           summary_var = "H0110001") %>% 
+  arrange(GEOID) %>% 
+  mutate(value = value / summary_value) %>% 
+  select(-summary_value) %>% 
+  spread(variable, value) %>% 
+  rename_at(vars("units_owned_entire", "units_owned_loan", "units_rented"), funs(str_c("percent_", .))) -> allegheny_housing
+
+allegheny_housing <- replace(allegheny_housing, is.na(allegheny_housing), 0)
+
+get_decennial(geography = "tract", 
+                           variables = vars_housing,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = TRUE) %>% 
+  select(-c(variable, value)) -> allegheny_geo
 ```
 
 ```{r}
-allegheny_data_pca %>% 
+str(allegheny_housing)
+str(allegheny_demographics)
+
+allegheny_geo %>% 
+  left_join(allegheny_housing) %>% 
+  left_join(allegheny_demographics) %>% 
+  mutate(id = str_c(GEOID, NAME, sep = "|")) %>% 
+  distinct() -> allegheny
+
+allegheny %>% 
+  count(id, sort = TRUE)
+```
+
+
+```{r}
+allegheny %>%
+  select(-c(id, GEOID)) %>% 
+  st_set_geometry(NULL) %>% 
+  remove_rownames() %>% 
+  column_to_rownames(var = "NAME") -> allegheny_pca
+```
+
+```{r}
+allegheny_pca %>% 
   prcomp(scale = TRUE) -> pc
 ```
 
@@ -69,7 +115,7 @@ pc %>%
 
 ```{r}
 pc %>% 
-  augment(data = allegheny_data_pca) -> au
+  augment(data = allegheny_pca) -> au
 
 au %>% 
   head()
@@ -91,18 +137,17 @@ pc %>%
 ```
 
 ```{r}
-allegheny_data %>% 
-  spread(variable, value) %>% 
-  select(-GEOID) %>% 
-  remove_rownames() %>% 
+allegheny %>% 
+  select(-c(id, GEOID)) %>% 
+  st_set_geometry(NULL) %>% 
   nest() %>% 
   mutate(pca = map(data, ~ prcomp(.x %>% select(-NAME), 
                                   center = TRUE, scale = TRUE)),
-         pca_aug = map2(pca, data, ~augment(.x, data = .y))) -> allegheny_data_pca2
+         pca_aug = map2(pca, data, ~augment(.x, data = .y))) -> allegheny_pca2
 ```
 
 ```{r}
-allegheny_data_pca2 %>% 
+allegheny_pca2 %>% 
 mutate(
     pca_graph = map2(
       .x = pca,

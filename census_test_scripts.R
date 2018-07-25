@@ -2,6 +2,7 @@ library(tidyverse)
 library(tidycensus)
 library(tigris)
 library(sf)
+library(viridis)
 options(tigris_use_cache = TRUE)
 census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 

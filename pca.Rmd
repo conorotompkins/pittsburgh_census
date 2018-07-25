@@ -1,0 +1,120 @@
+---
+title: "ALlegheny County Tract Profiling"
+author: "Conor Tompkins"
+date: "July 24, 2018"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+library(tigris)
+library(sf)
+library(broom)
+library(ggfortify)
+options(tigris_use_cache = TRUE)
+census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
+
+theme_set(theme_minimal())
+theme_minimal()
+
+census_vars <- load_variables(2010, "sf1", cache = TRUE)
+```
+
+```{r}
+vars <- c(white = "P0050003", 
+          black = "P0050004", 
+          asian = "P0050006", 
+          hispanic = "P0040003",
+          units_owned_loan = "H0110002",
+          units_owned_entire = "H0110003",
+          units_rented = "H0110004")
+#age vars men and women
+#P0120003:P0120049
+
+allegheny_data <- get_decennial(geography = "tract", 
+                           variables = vars,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = FALSE)
+
+allegheny_data %>%
+  spread(variable, value) %>% 
+  select(-GEOID) %>% 
+  remove_rownames() %>% 
+  column_to_rownames(var = "NAME") -> allegheny_data_pca
+```
+
+```{r}
+allegheny_data_pca %>% 
+  prcomp(scale = TRUE) -> pc
+```
+
+```{r}
+pc %>% 
+  tidy() %>% 
+  head()
+```
+
+```{r}
+pc %>% 
+  tidy("pcs")
+```
+
+```{r}
+pc %>% 
+  augment(data = allegheny_data_pca) -> au
+
+au %>% 
+  head()
+```
+
+```{r}
+pc %>% 
+  tidy("pcs") %>%
+  select(-std.dev) %>% 
+  gather(measure, value, -PC) %>% 
+    ggplot(aes(PC, value)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~measure) +
+    labs(title = "Variance explained by each principal component",
+         x = "Principal Component",
+         y = NULL) +
+    scale_x_continuous(breaks = 1:7)
+```
+
+```{r}
+allegheny_data %>% 
+  spread(variable, value) %>% 
+  select(-GEOID) %>% 
+  remove_rownames() %>% 
+  nest() %>% 
+  mutate(pca = map(data, ~ prcomp(.x %>% select(-NAME), 
+                                  center = TRUE, scale = TRUE)),
+         pca_aug = map2(pca, data, ~augment(.x, data = .y))) -> allegheny_data_pca2
+```
+
+```{r}
+allegheny_data_pca2 %>% 
+mutate(
+    pca_graph = map2(
+      .x = pca,
+      .y = data,
+      ~ autoplot(.x, loadings = TRUE, loadings.label = TRUE,
+                 loadings.label.repel = TRUE,
+                 data = .y) +
+        theme_bw() +
+        labs(x = "Principal Component 1",
+             y = "Principal Component 2",
+             title = "First two principal components of PCA on Allegheny County Census data")
+    )
+  ) %>%
+  pull(pca_graph)
+```

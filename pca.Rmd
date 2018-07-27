@@ -18,6 +18,7 @@ library(tigris)
 library(sf)
 library(broom)
 library(ggfortify)
+library(viridis)
 options(tigris_use_cache = TRUE)
 census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 
@@ -115,7 +116,8 @@ pc %>%
 
 ```{r}
 pc %>% 
-  augment(data = allegheny_pca) -> au
+  augment(data = allegheny_pca) %>% 
+  as_tibble() -> au
 
 au %>% 
   head()
@@ -162,4 +164,38 @@ mutate(
     )
   ) %>%
   pull(pca_graph)
+```
+
+```{r}
+au %>% 
+  rename(NAME = .rownames) %>% 
+  gather(variable, value, -c(NAME)) -> au_long
+
+st_erase <- function(x, y) {
+  st_difference(x, st_union(st_combine(y)))
+}
+
+allegheny_water <- area_water("PA", "Allegheny", class = "sf")
+
+allegheny_geo <- st_erase(allegheny_geo, allegheny_water)
+
+
+allegheny_geo %>% 
+  left_join(au %>% rename(NAME = .rownames)) %>% 
+  #gather(variable, value, contains("percent")) %>% 
+  gather(pc, pc_value, contains(".fitted")) -> allegheny_pca_map
+
+allegheny_pca_map %>% 
+  filter(pc %in% c(".fittedPC1", "fittedPC2")) -> test 
+
+allegheny_pca_map %>% 
+  ggplot(aes(fill = pc_value, color = pc_value)) + 
+  geom_sf() + 
+  facet_wrap(~pc) +
+  coord_sf(crs = 26911) + 
+  scale_fill_viridis("Principal component", option = "magma") + 
+  scale_color_viridis("Principal component", option = "magma") +
+  labs(title = "Allegheny County",
+       subtitle = "American Community Survey") +
+  theme(axis.text = element_blank())
 ```

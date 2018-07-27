@@ -186,15 +186,16 @@ allegheny_geo %>%
   gather(pc, pc_value, contains(".fitted")) -> allegheny_pca_map
 
 allegheny_pca_map %>% 
-  filter(pc %in% c(".fittedPC1", "fittedPC2")) -> test 
+  filter(pc == ".fittedPC1" | pc == "fittedPC2") -> test 
 
 allegheny_pca_map %>% 
+  #filter(pc == ".fittedPC3") %>% 
   ggplot(aes(fill = pc_value, color = pc_value)) + 
   geom_sf() + 
   facet_wrap(~pc) +
   coord_sf(crs = 26911) + 
-  scale_fill_viridis("Principal component", option = "magma") + 
-  scale_color_viridis("Principal component", option = "magma") +
+  scale_fill_viridis("Principal component value", option = "magma") + 
+  scale_color_viridis("Principal component value", option = "magma") +
   labs(title = "Allegheny County",
        subtitle = "American Community Survey") +
   theme(axis.text = element_blank())

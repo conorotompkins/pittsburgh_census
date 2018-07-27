@@ -50,6 +50,14 @@ allegheny_race <- get_decennial(geography = "tract",
                                 geometry = TRUE,
                                 summary_var = "P0010001") 
 
+get_decennial(geography = "county", 
+              variables = racevars,
+              state = "PA", 
+              county = "Allegheny", 
+              geometry = TRUE,
+              summary_var = "P0010001") %>% 
+  mutate(value = value / summary_value)
+
 head(allegheny_race)
 
 allegheny_race %>%

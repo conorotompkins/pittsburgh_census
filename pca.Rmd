@@ -20,6 +20,7 @@ library(sf)
 library(broom)
 library(ggfortify)
 library(viridis)
+library(janitor)
 options(tigris_use_cache = TRUE)
 census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 
@@ -91,27 +92,22 @@ get_decennial(geography = "tract",
                            geometry = FALSE,
                            summary_var = "P0120001") %>% 
   rename(var_id = variable) %>% 
-  left_join(vars_age_total, by = c("var_id" = "name")) %>% 
-  rename(variable = label,
-         total_population = summary_value) %>% 
-  #select(-c(var_id, concept)) %>% 
-  spread(variable, value)
-  
-    
-  mutate(id = row_number()) %>% 
+  mutate(value = value / summary_value) %>% 
+  spread(var_id, value) -> allegheny_age_sex
 
+colnames(allegheny_age_sex) <- c("GEOID", "NAME", "summary_value", vars_age_total$label)
+colnames(allegheny_age_sex)
 
-  mutate(variable = tolower(variable),
-         variable = str_replace(variable, ": !! ", " "),
-         variable = str_replace(variable, "  ", ""),
-         value = value / total_population) %>% 
-  spread(variable, value) %>% 
-  select(-id) -> allegheny_age_sex
+allegheny_age_sex %>% 
+  clean_names() %>% 
+  rename(GEOID = geoid,
+         NAME = name,
+         total_population = summary_value) -> allegheny_age_sex
 
 allegheny_age_sex <- replace(allegheny_age_sex, is.na(allegheny_age_sex), 0)
 
 allegheny_age_sex %>% 
-  count(NAME, sort = TRUE)
+  select(GEOID, NAME, total_population) -> allegheny_age_sex
 ```
 
 
@@ -130,8 +126,8 @@ str(allegheny_demographics)
 str(allegheny_age_sex)
 
 allegheny_geo %>% 
-  #left_join(allegheny_housing) %>% 
-  #left_join(allegheny_demographics) %>% 
+  left_join(allegheny_housing) %>% 
+  left_join(allegheny_demographics) %>% 
   left_join(allegheny_age_sex) %>% 
   mutate(id = str_c(GEOID, NAME, sep = "|")) %>% 
   distinct() -> allegheny
@@ -186,7 +182,7 @@ pc %>%
     labs(title = "Variance explained by each principal component",
          x = "Principal Component",
          y = NULL) +
-    scale_x_continuous(breaks = 1:7)
+    scale_x_continuous(breaks = 1:59)
 ```
 
 ```{r}
@@ -237,10 +233,7 @@ allegheny_geo %>%
   gather(pc, pc_value, contains(".fitted")) -> allegheny_pca_map
 
 allegheny_pca_map %>% 
-  filter(pc == ".fittedPC1" | pc == "fittedPC2") -> test 
-
-allegheny_pca_map %>% 
-  #filter(pc == ".fittedPC3") %>% 
+  filter(pc %in% c(".fittedPC1", ".fittedPC2")) %>% 
   ggplot(aes(fill = pc_value, color = pc_value)) + 
   geom_sf() + 
   facet_wrap(~pc) +

@@ -8,7 +8,8 @@ runtime: shiny
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
-                      message = FALSE, warning = FALSE)
+                      message = FALSE, 
+                      warning = FALSE)
 ```
 
 ```{r}
@@ -48,7 +49,9 @@ get_decennial(geography = "tract",
   rename_at(vars("white", "black", "asian", "hispanic"), funs(str_c("percent_", .))) -> allegheny_demographics
 
 allegheny_demographics <- replace(allegheny_demographics, is.na(allegheny_demographics), 0)
+```
 
+```{r}
 vars_housing <- c(units_owned_loan = "H0110002",
           units_owned_entire = "H0110003",
           units_rented = "H0110004")
@@ -66,7 +69,53 @@ get_decennial(geography = "tract",
   rename_at(vars("units_owned_entire", "units_owned_loan", "units_rented"), funs(str_c("percent_", .))) -> allegheny_housing
 
 allegheny_housing <- replace(allegheny_housing, is.na(allegheny_housing), 0)
+```
 
+```{r}
+vars_age_total <- census_vars %>% 
+  filter(concept == "P12. Sex By Age [49]",
+         label != "Total population",
+         label != "Male:")
+
+#vars_age_label <- vars_age_total %>% 
+#  select(label)
+
+#vars_age_name <- vars_age_total %>% 
+#  select()
+
+#this is not working. too many duplicate rows
+get_decennial(geography = "tract", 
+                           variables = vars_age_total$name,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = FALSE,
+                           summary_var = "P0120001") %>% 
+  rename(var_id = variable) %>% 
+  left_join(vars_age_total, by = c("var_id" = "name")) %>% 
+  rename(variable = label,
+         total_population = summary_value) %>% 
+  #select(-c(var_id, concept)) %>% 
+  spread(variable, value)
+  
+    
+  mutate(id = row_number()) %>% 
+
+
+  mutate(variable = tolower(variable),
+         variable = str_replace(variable, ": !! ", " "),
+         variable = str_replace(variable, "  ", ""),
+         value = value / total_population) %>% 
+  spread(variable, value) %>% 
+  select(-id) -> allegheny_age_sex
+
+allegheny_age_sex <- replace(allegheny_age_sex, is.na(allegheny_age_sex), 0)
+
+allegheny_age_sex %>% 
+  count(NAME, sort = TRUE)
+```
+
+
+```{r}
 get_decennial(geography = "tract", 
                            variables = vars_housing,
                            state = "PA", 
@@ -78,15 +127,17 @@ get_decennial(geography = "tract",
 ```{r}
 str(allegheny_housing)
 str(allegheny_demographics)
+str(allegheny_age_sex)
 
 allegheny_geo %>% 
-  left_join(allegheny_housing) %>% 
-  left_join(allegheny_demographics) %>% 
+  #left_join(allegheny_housing) %>% 
+  #left_join(allegheny_demographics) %>% 
+  left_join(allegheny_age_sex) %>% 
   mutate(id = str_c(GEOID, NAME, sep = "|")) %>% 
   distinct() -> allegheny
 
-allegheny %>% 
-  count(id, sort = TRUE)
+#allegheny %>% 
+#  count(id, sort = TRUE)
 ```
 
 

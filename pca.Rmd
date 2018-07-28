@@ -110,6 +110,21 @@ allegheny_age_sex %>%
   select(GEOID, NAME, total_population) -> allegheny_age_sex
 ```
 
+```{r}
+allegheny_pca %>%
+  ggplot(aes(percent_white, percent_units_rented)) +
+  geom_point() +
+  geom_smooth()
+
+
+allegheny_pca %>%
+  gather(variable, value, -percent_white) %>% 
+  ggplot(aes(percent_white, value)) +
+  geom_point(alpha = .5) +
+  geom_smooth() +
+  facet_wrap(~variable, scales = "free")
+```
+
 
 ```{r}
 get_decennial(geography = "tract", 

@@ -1,5 +1,5 @@
 ---
-title: "ALlegheny County Tract Profiling"
+title: "Allegheny County Tract Profiling"
 author: "Conor Tompkins"
 date: "July 24, 2018"
 output: html_document
@@ -121,15 +121,15 @@ get_decennial(geography = "tract",
 ```
 
 ```{r}
-str(allegheny_housing)
-str(allegheny_demographics)
-str(allegheny_age_sex)
+#str(allegheny_housing)
+#str(allegheny_demographics)
+#str(allegheny_age_sex)
 
 allegheny_geo %>% 
   left_join(allegheny_housing) %>% 
   left_join(allegheny_demographics) %>% 
   left_join(allegheny_age_sex) %>% 
-  mutate(id = str_c(GEOID, NAME, sep = "|")) %>% 
+  mutate(id = str_c(GEOID, NAME, sep = " | ")) %>% 
   distinct() -> allegheny
 
 #allegheny %>% 

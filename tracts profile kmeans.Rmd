@@ -1,0 +1,217 @@
+---
+title: "Allegheny County Tract Profiling"
+author: "Conor Tompkins"
+date: "July 24, 2018"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE, 
+                      warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+library(tigris)
+library(sf)
+library(broom)
+library(ggfortify)
+library(viridis)
+library(janitor)
+options(tigris_use_cache = TRUE)
+census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
+
+theme_set(theme_minimal())
+
+census_vars <- load_variables(2010, "sf1", cache = TRUE)
+```
+
+```{r}
+vars_demo <- c(white = "P0050003", 
+          black = "P0050004", 
+          asian = "P0050006", 
+          hispanic = "P0040003")
+#age vars men and women
+#P0120003:P0120049
+
+get_decennial(geography = "tract", 
+                           variables = vars_demo,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = FALSE,
+                           summary_var = "P0010001") %>% 
+  arrange(GEOID) %>% 
+  mutate(value = value / summary_value) %>% 
+  select(-summary_value) %>% 
+  spread(variable, value) %>% 
+  rename_at(vars("white", "black", "asian", "hispanic"), funs(str_c("percent_", .))) -> allegheny_demographics
+
+allegheny_demographics <- replace(allegheny_demographics, is.na(allegheny_demographics), 0)
+```
+
+```{r}
+vars_housing <- c(units_owned_loan = "H0110002",
+          units_owned_entire = "H0110003",
+          units_rented = "H0110004")
+
+get_decennial(geography = "tract", 
+                           variables = vars_housing,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = FALSE,
+                           summary_var = "H0110001") %>% 
+  arrange(GEOID) %>% 
+  mutate(value = value / summary_value) %>% 
+  select(-summary_value) %>% 
+  spread(variable, value) %>% 
+  rename_at(vars("units_owned_entire", "units_owned_loan", "units_rented"), funs(str_c("percent_", .))) -> allegheny_housing
+
+allegheny_housing <- replace(allegheny_housing, is.na(allegheny_housing), 0)
+```
+
+```{r}
+vars_age_total <- census_vars %>% 
+  filter(concept == "P12. Sex By Age [49]",
+         label != "Total population",
+         label != "Male:")
+
+#vars_age_label <- vars_age_total %>% 
+#  select(label)
+
+#vars_age_name <- vars_age_total %>% 
+#  select()
+
+#this is not working. too many duplicate rows
+get_decennial(geography = "tract", 
+                           variables = vars_age_total$name,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = FALSE,
+                           summary_var = "P0120001") %>% 
+  rename(var_id = variable) %>% 
+  mutate(value = value / summary_value) %>% 
+  spread(var_id, value) -> allegheny_age_sex
+
+colnames(allegheny_age_sex) <- c("GEOID", "NAME", "summary_value", vars_age_total$label)
+colnames(allegheny_age_sex)
+
+allegheny_age_sex %>% 
+  clean_names() %>% 
+  rename(GEOID = geoid,
+         NAME = name,
+         total_population = summary_value) -> allegheny_age_sex
+
+allegheny_age_sex <- replace(allegheny_age_sex, is.na(allegheny_age_sex), 0)
+
+allegheny_age_sex %>% 
+  select(GEOID, NAME, total_population) -> allegheny_age_sex
+```
+
+```{r}
+get_decennial(geography = "tract", 
+                           variables = vars_housing,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = TRUE) %>% 
+  select(-c(variable, value)) -> allegheny_geo
+```
+
+```{r}
+#str(allegheny_housing)
+#str(allegheny_demographics)
+#str(allegheny_age_sex)
+
+allegheny_geo %>% 
+  left_join(allegheny_housing) %>% 
+  left_join(allegheny_demographics) %>% 
+  left_join(allegheny_age_sex) %>% 
+  mutate(id = str_c(GEOID, NAME, sep = " | ")) %>% 
+  distinct() -> allegheny
+```
+
+```{r}
+allegheny %>%
+  select(-c(NAME, id)) %>% 
+  st_set_geometry(NULL) %>% 
+  mutate_at(vars(percent_units_owned_entire:total_population), scale) -> allegheny_kmeans
+
+kclust <- kmeans(allegheny_kmeans, centers = 5)
+kclust
+```
+```{r}
+kclusts <- tibble(k = 1:9) %>%
+  mutate(
+    kclust = map(k, ~kmeans(allegheny_kmeans, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, allegheny_kmeans)
+  )
+
+kclusts
+```
+
+```{r}
+clusters <- kclusts %>%
+  unnest(tidied)
+
+assignments <- kclusts %>% 
+  unnest(augmented)
+
+clusterings <- kclusts %>%
+  unnest(glanced, .drop = TRUE)
+```
+
+
+```{r}
+p1 <- ggplot(assignments, aes(percent_white, percent_units_rented)) +
+  geom_point(aes(color = .cluster)) + 
+  facet_wrap(~ k)
+p1
+assignments %>% 
+gather(variable, value, -c(percent_white, k, GEOID, .cluster)) %>% 
+  ggplot(aes(percent_white, value, color = .cluster)) +
+  geom_point(alpha = .5) +
+  #geom_smooth() +
+  facet_wrap(~variable, scales = "free")
+
+```
+
+
+```{r}
+allegheny_kmeans <- augment(kclust, allegheny_kmeans)
+
+allegheny_kmeans %>% 
+  ggplot(aes(percent_white, percent_units_rented, color = .cluster)) +
+  geom_point()
+```
+```{r}
+allegheny_geo %>% 
+  left_join(allegheny_kmeans) -> allegheny
+```
+
+```{r}
+st_erase <- function(x, y) {
+  st_difference(x, st_union(st_combine(y)))
+}
+
+allegheny_water <- area_water("PA", "Allegheny", class = "sf")
+
+allegheny <- st_erase(allegheny, allegheny_water)
+
+
+allegheny %>% 
+  #mutate(.cluster = as.factor(.cluster)) %>% 
+  ggplot(aes(fill = .cluster, color = .cluster)) +
+  geom_sf() +
+  scale_fill_viridis(discrete = TRUE) + 
+  scale_color_viridis(discrete = TRUE)
+```
+
+https://cran.r-project.org/web/packages/broom/vignettes/kmeans.html
+
+
+
+

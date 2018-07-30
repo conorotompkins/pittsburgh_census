@@ -138,3 +138,8 @@ pa_race %>%
   scale_fill_viridis() +
   scale_color_viridis()
 ```
+
+http://strimas.com/r/tidy-sf/
+https://walkerke.github.io/tidycensus/articles/spatial-data.html
+https://walkerke.github.io/tidycensus/index.html
+https://walkerke.github.io/2017/06/comparing-metros/

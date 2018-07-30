@@ -1,0 +1,140 @@
+---
+title: "Exploring Allegheny County with census data"
+author: "Conor Tompkins"
+date: "July 30, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE, 
+                      warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+library(tigris)
+library(sf)
+library(broom)
+library(ggfortify)
+library(viridis)
+library(janitor)
+options(tigris_use_cache = TRUE)
+census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
+
+theme_set(theme_minimal())
+
+census_vars <- load_variables(2010, "sf1", cache = TRUE)
+```
+
+```{r}
+allegheny <- get_acs(state = "PA", 
+                     county = "Allegheny County", 
+                     geography = "tract", 
+                     variables = c(median_income = "B19013_001"), 
+                     geometry = TRUE,
+                     cb = FALSE)
+
+head(allegheny)
+```
+
+```{r}
+st_erase <- function(x, y) {
+  st_difference(x, st_union(st_combine(y)))
+}
+
+allegheny_water <- area_water("PA", "Allegheny", class = "sf")
+
+allegheny_erase <- st_erase(allegheny, allegheny_water)
+
+allegheny_erase %>%
+  ggplot(aes(fill = estimate, color = estimate)) + 
+  geom_sf(color = "grey") + 
+  #coord_sf(crs = 26911) + 
+  scale_fill_viridis("Median household income", option = "magma")
+  labs(title = "Allegheny County",
+       subtitle = "American Community Survey") +
+  theme(axis.text = element_blank())
+```
+
+```{r}
+racevars <- c(White = "P0050003", 
+              Black = "P0050004", 
+              Asian = "P0050006", 
+              Hispanic = "P0040003")
+
+allegheny_race <- get_decennial(geography = "tract", 
+                                variables = racevars,
+                                state = "PA", 
+                                county = "Allegheny", 
+                                geometry = TRUE,
+                                summary_var = "P0010001") 
+
+get_decennial(geography = "county", 
+              variables = racevars,
+              state = "PA", 
+              county = "Allegheny", 
+              geometry = TRUE,
+              summary_var = "P0010001") %>% 
+  mutate(value = value / summary_value)
+
+head(allegheny_race)
+```
+
+```{r}
+allegheny_race %>%
+  mutate(pct = 100 * (value / summary_value)) %>%
+  ggplot(aes(fill = pct, color = pct)) +
+  facet_wrap(~variable) +
+  geom_sf() +
+  coord_sf(crs = 26915) + 
+  scale_fill_viridis() +
+  scale_color_viridis()
+```
+
+```{r}
+vars <- load_variables(2016, "acs5", cache = TRUE)
+```
+
+```{r}
+pa <- get_acs(state = "PA",
+                     geography = "tract", 
+                     variables = "B19013_001", 
+                     geometry = TRUE)
+
+head(pa)
+```
+```{r}
+pa %>%
+  ggplot(aes(fill = estimate, color = estimate)) + 
+  geom_sf() + 
+  #coord_sf(crs = 26911) + 
+  scale_fill_viridis(option = "magma") + 
+  scale_color_viridis(option = "magma")
+```
+```{r}
+racevars <- c(White = "P0050003", 
+              Black = "P0050004", 
+              Asian = "P0050006", 
+              Hispanic = "P0040003")
+
+pa_race <- get_decennial(geography = "tract", 
+                                variables = racevars,
+                                state = "PA", 
+                                geometry = TRUE,
+                                summary_var = "P0010001") 
+
+head(pa_race)
+```
+
+```{r}
+pa_race %>%
+  mutate(pct = 100 * (value / summary_value)) %>%
+  ggplot(aes(fill = pct, color = pct)) +
+  facet_wrap(~variable) +
+  geom_sf() +
+  #coord_sf(crs = 26915) + 
+  scale_fill_viridis() +
+  scale_color_viridis()
+```

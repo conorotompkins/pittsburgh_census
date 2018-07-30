@@ -106,26 +106,14 @@ allegheny_age_sex %>%
 
 allegheny_age_sex <- replace(allegheny_age_sex, is.na(allegheny_age_sex), 0)
 
-allegheny_age_sex %>% 
-  select(GEOID, NAME, total_population) -> allegheny_age_sex
+#allegheny_age_sex %>% 
+#  select(GEOID, NAME, total_population) -> allegheny_age_sex
 ```
 
-```{r}
-get_decennial(geography = "tract", 
-                           variables = vars_housing,
-                           state = "PA", 
-                           county = "Allegheny", 
-                           geometry = TRUE) %>% 
-  select(-c(variable, value)) -> allegheny_geo
-```
+
 
 ```{r}
-#str(allegheny_housing)
-#str(allegheny_demographics)
-#str(allegheny_age_sex)
-
-allegheny_geo %>% 
-  left_join(allegheny_housing) %>% 
+allegheny_housing %>% 
   left_join(allegheny_demographics) %>% 
   left_join(allegheny_age_sex) %>% 
   mutate(id = str_c(GEOID, NAME, sep = " | ")) %>% 
@@ -134,12 +122,8 @@ allegheny_geo %>%
 
 ```{r}
 allegheny %>%
-  select(-c(NAME, id)) %>% 
-  st_set_geometry(NULL) %>% 
+  select(-c(GEOID, NAME, id)) %>% 
   mutate_at(vars(percent_units_owned_entire:total_population), scale) -> allegheny_kmeans
-
-kclust <- kmeans(allegheny_kmeans, centers = 5)
-kclust
 ```
 ```{r}
 kclusts <- tibble(k = 1:9) %>%
@@ -167,26 +151,44 @@ clusterings <- kclusts %>%
 
 ```{r}
 p1 <- ggplot(assignments, aes(percent_white, percent_units_rented)) +
-  geom_point(aes(color = .cluster)) + 
+  geom_point(aes(color = .cluster), alpha = .3) + 
   facet_wrap(~ k)
 p1
-assignments %>% 
-gather(variable, value, -c(percent_white, k, GEOID, .cluster)) %>% 
-  ggplot(aes(percent_white, value, color = .cluster)) +
-  geom_point(alpha = .5) +
-  #geom_smooth() +
-  facet_wrap(~variable, scales = "free")
+```
 
+```{r}
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:9)
 ```
 
 
 ```{r}
-allegheny_kmeans <- augment(kclust, allegheny_kmeans)
+assignments %>% 
+  filter(k == 2) -> allegheny_kmeans_2
 
-allegheny_kmeans %>% 
+allegheny_kmeans_2 %>% 
   ggplot(aes(percent_white, percent_units_rented, color = .cluster)) +
   geom_point()
 ```
+```{r}
+kclust <- kmeans(allegheny_kmeans, centers = 2)
+
+kclust %>% 
+  augment(allegheny) -> allegheny_kmeans
+
+```
+
+```{r}
+get_decennial(geography = "tract", 
+                           variables = vars_housing,
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = TRUE) %>% 
+  select(-c(variable, value)) -> allegheny_geo
+```
+
 ```{r}
 allegheny_geo %>% 
   left_join(allegheny_kmeans) -> allegheny
@@ -205,9 +207,16 @@ allegheny <- st_erase(allegheny, allegheny_water)
 allegheny %>% 
   #mutate(.cluster = as.factor(.cluster)) %>% 
   ggplot(aes(fill = .cluster, color = .cluster)) +
-  geom_sf() +
-  scale_fill_viridis(discrete = TRUE) + 
-  scale_color_viridis(discrete = TRUE)
+  geom_sf() #+
+  #scale_fill_viridis(discrete = TRUE) + 
+  #scale_color_viridis(discrete = TRUE)
+```
+
+```{r}
+allegheny %>%
+  group_by(.cluster) %>% 
+  ggplot(aes(fill = .cluster, color = .cluster)) +
+  geom_sf(color = "grey")
 ```
 
 https://cran.r-project.org/web/packages/broom/vignettes/kmeans.html

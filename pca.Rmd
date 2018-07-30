@@ -111,22 +111,6 @@ allegheny_age_sex %>%
 ```
 
 ```{r}
-allegheny_pca %>%
-  ggplot(aes(percent_white, percent_units_rented)) +
-  geom_point() +
-  geom_smooth()
-
-
-allegheny_pca %>%
-  gather(variable, value, -percent_white) %>% 
-  ggplot(aes(percent_white, value)) +
-  geom_point(alpha = .5) +
-  geom_smooth() +
-  facet_wrap(~variable, scales = "free")
-```
-
-
-```{r}
 get_decennial(geography = "tract", 
                            variables = vars_housing,
                            state = "PA", 
@@ -159,6 +143,21 @@ allegheny %>%
   remove_rownames() %>% 
   column_to_rownames(var = "NAME") -> allegheny_pca
 ```
+```{r}
+allegheny_pca %>%
+  ggplot(aes(percent_white, percent_units_rented)) +
+  geom_point() +
+  geom_smooth()
+
+
+allegheny_pca %>%
+  gather(variable, value, -percent_white) %>% 
+  ggplot(aes(percent_white, value)) +
+  geom_point(alpha = .5) +
+  geom_smooth() +
+  facet_wrap(~variable, scales = "free")
+```
+
 
 ```{r}
 allegheny_pca %>% 

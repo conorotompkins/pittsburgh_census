@@ -1,7 +1,7 @@
 ---
 title: "Clustering Allegheny County census tracts with PCA and k-means"
 author: "Conor Tompkins"
-date: "August 12, 2018"
+date: "September 8, 2018"
 output: html_document
 runtime: shiny
 ---
@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 In this post I will use the census API discussed in [the last post]() to cluster the Allegheny County census tracts using PCA and k-means.
 
-#Setup
+##Setup
 ```{r}
 library(tidyverse)
 library(tidycensus)
@@ -28,15 +28,36 @@ library(scales)
 library(ggthemes)
 
 options(tigris_use_cache = TRUE)
-census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 
 theme_set(theme_minimal())
+```
+
+```{r, include=FALSE}
+my_census_key <- "a16f3636406d2b544871e2ae49bb318c3ddcacba"
+```
+
+```{r}
+census_api_key(my_census_key)
 
 census_vars <- load_variables(2010, "sf1", cache = TRUE)
 ```
 
-#Download data
-This code downloads data about the ethnicities resident in the tracts.
+Census tracts are small geographic areas analogous to local neighborhoods. This is a map of all the tracts in Allegheny County, for reference:
+```{r, echo = FALSE}
+get_decennial(geography = "tract", 
+                           variables = "P0050003",
+                           state = "PA", 
+                           county = "Allegheny", 
+                           geometry = TRUE) %>% 
+  select(-c(variable, value)) %>% 
+  ggplot() +
+  geom_sf() +
+  theme(axis.text = element_blank())
+```
+
+
+##Download data
+This code downloads data about the ethnicities resident in the tracts and calculates them as a % of the tract population.
 ```{r}
 vars_demo <- c(white = "P0050003", 
           black = "P0050004", 
@@ -55,7 +76,7 @@ get_decennial(geography = "tract",
   mutate(value = value / summary_value) %>% 
   select(-summary_value) %>% 
   spread(variable, value) %>% 
-  rename_at(vars("white", "black", "asian", "hispanic"), funs(str_c("percent_", .))) -> allegheny_demographics
+  rename_at(vars("white", "black", "asian", "hispanic"), funs(str_c("pct_", .))) -> allegheny_demographics
 
 allegheny_demographics <- replace(allegheny_demographics, is.na(allegheny_demographics), 0)
 ```
@@ -76,7 +97,7 @@ get_decennial(geography = "tract",
   mutate(value = value / summary_value) %>% 
   select(-summary_value) %>% 
   spread(variable, value) %>% 
-  rename_at(vars("units_owned_entire", "units_owned_loan", "units_rented"), funs(str_c("percent_", .))) -> allegheny_housing
+  rename_at(vars("units_owned_entire", "units_owned_loan", "units_rented"), funs(str_c("pct_", .))) -> allegheny_housing
 
 allegheny_housing <- replace(allegheny_housing, is.na(allegheny_housing), 0)
 ```
@@ -132,20 +153,41 @@ allegheny_geo %>%
   mutate(id = str_c(GEOID, NAME, sep = " | ")) %>% 
   distinct() -> allegheny
 ```
-#Exploratory graph
-This graph compares the percent of white residents to the remaining variables in the data. It is already obvious that percent_white and percent_black are negatively correlated with each other.
+##Exploratory graph
+This graph compares the percent of white residents to the remaining variables in the data. pct_white is on the x axis of each of the smaller charts. Note that each chart's Y axis has its own scale. It is already obvious that pct_white and pct_black are negatively correlated with each other.
 ```{r}
 allegheny %>%
   st_set_geometry(NULL) %>% 
-  select(contains("percent"), total_population) %>% 
-  gather(variable, value, -percent_white) %>% 
-  ggplot(aes(percent_white, value)) +
+  select(contains("pct")) %>% 
+  gather(variable, value, -pct_white) %>% 
+  ggplot(aes(pct_white, value)) +
   geom_point(alpha = .5) +
   geom_smooth() +
-  facet_wrap(~variable, scales = "free")
+  facet_wrap(~variable, scales = "free", nrow = 3, strip.position="left") +
+  scale_x_continuous(label = percent) +
+  scale_y_continuous(label = percent) +
+  labs(x = NULL) +
+  theme_bw() +
+  theme(strip.placement = "outside")
 ```
 
-#Prepare for PCA
+This code plots the total population against the other variables:
+```{r}
+allegheny %>%
+  st_set_geometry(NULL) %>% 
+  select(contains("pct"), total_population) %>% 
+  gather(variable, value, -total_population) %>% 
+  ggplot(aes(total_population, value)) +
+  geom_point(alpha = .5) +
+  geom_smooth() +
+  facet_wrap(~variable, scales = "free", nrow = 3, strip.position="left") +
+  scale_x_continuous(label = comma) +
+  scale_y_continuous(label = percent) +
+  theme_bw() +
+  theme(strip.placement = "outside")
+```
+
+##Prepare for PCA
 This code prepares the data for PCA:
 ```{r}
 allegheny %>%
@@ -153,7 +195,6 @@ allegheny %>%
   st_set_geometry(NULL) %>% 
   remove_rownames() %>% 
   column_to_rownames(var = "NAME") -> allegheny_pca
-
 
 allegheny_pca %>% 
   prcomp(scale = TRUE) -> pc
@@ -190,12 +231,13 @@ pc %>%
          x = "Principal Component",
          y = NULL) +
     scale_x_continuous(breaks = 1:8) +
-    scale_y_continuous(label = percent)
+    scale_y_continuous(label = percent) +
+  theme_bw()
 ```
 
-This shows how the PCA function rearranged the data to maximize the variance in the first few PCs. PC1 is largely defined by the percent of a tract that is white or black, the percent of housing units that are owned, and the total population of the tract. The "percent_white" and "percent_black" arrows point in opposite directions, which reflects Pittsburgh's status as a segregated city. LINKS
+This shows how the PCA function rearranged the data to maximize the variance in the first few PCs. PC1 is largely defined by the percent of a tract that is white or black, the percent of housing units that are owned, and the total population of the tract. The "pct_white" and "pct_black" arrows point in opposite directions, which reflects Pittsburgh's [status](http://suds-cmu.org/2017/02/21/the-legacies-of-redlining-in-pittsburgh/) as a [segregated](http://www.duqsm.com/segregation-still-a-problem-in-pittsburgh/) [city](https://triblive.com/news/allegheny/9807345-74/schools-students-pittsburgh).
 
-PC2 explains less of the variance, and is influenced by the total population of a tract, and the percent of a tract that is hispanic, asian, or black.
+PC2 explains less of the variance, and is influenced by the percent of a tract that is hispanic, asian, or black.
 ```{r}
 allegheny %>% 
   select(-c(id, GEOID)) %>% 
@@ -236,10 +278,8 @@ allegheny_water <- area_water("PA", "Allegheny", class = "sf")
 
 allegheny_geo <- st_erase(allegheny_geo, allegheny_water)
 
-
 allegheny_geo %>% 
   left_join(df_au %>% rename(NAME = .rownames)) %>% 
-  #gather(variable, value, contains("percent")) %>% 
   gather(pc, pc_value, contains(".fitted")) %>% 
   mutate(pc = str_replace(pc, ".fitted", "")) -> allegheny_pca_map
 
@@ -256,8 +296,7 @@ allegheny_pca_map %>%
   theme(axis.text = element_blank())
 ```
 
-
-#k-means
+##Clustering with k-means
 Next I will use k-means to cluster the PC data.
 ```{r}
 df_au_long %>% 
@@ -275,7 +314,6 @@ kclusts <- tibble(k = 1:9) %>%
     glanced = map(kclust, glance),
     augmented = map(kclust, augment, allegheny_kmeans)
   )
-
 ```
 
 ```{r}
@@ -304,10 +342,11 @@ We can visualize how the data would look if it were assigned to a different numb
 ```{r}
 ggplot(assignments, aes(.fittedPC1, .fittedPC2)) +
   geom_point(aes(color = .cluster), alpha = .7) + 
-  facet_wrap(~ k) +
+  facet_wrap(~ str_c(k, " cluster(s)")) +
   scale_color_discrete("Cluster") +
   labs(x = "PC1",
-       y = "PC2")
+       y = "PC2") +
+  theme_bw()
 ```
 
 This code divides the data into 2 clusters and maps the clusters onto the tract map.
@@ -347,7 +386,9 @@ allegheny <- st_erase(allegheny, allegheny_water)
 allegheny %>% 
   ggplot(aes(fill = .cluster, color = .cluster)) +
   geom_sf(color = "grey") +
-  scale_fill_viridis("Cluster", discrete = TRUE) + 
-  scale_color_viridis("Cluster", discrete = TRUE) +
+  scale_fill_viridis("Cluster", discrete = TRUE, direction = 1) + 
+  scale_color_viridis("Cluster", discrete = TRUE, direction = 1) +
   theme(axis.text = element_blank())
 ```
+
+The second cluster largely follows the city limits, but excludes areas such as Mount Washington, Squirrel Hill, and Shadyside. It also includes a few areas outside of the city like Duquesne and McKeesport.

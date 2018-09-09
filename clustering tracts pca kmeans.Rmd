@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE)
 ```
 
-In this post I will use the census API discussed in [the last post]() to cluster the Allegheny County census tracts using PCA and k-means.
+In this post I will use the census API discussed in [the last post](https://ctompkins.netlify.com/2018/08/06/exploring-allegheny-county-with-census-data/) to cluster the Allegheny County census tracts using PCA and k-means.
 
 ##Setup
 ```{r}

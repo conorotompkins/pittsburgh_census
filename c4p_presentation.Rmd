@@ -108,3 +108,11 @@ allegheny <- get_decennial(geography = "block",
 ```{r}
 
 ```
+
+
+Links
+
+*https://walkerke.github.io/tidycensus/articles/basic-usage.html
+*https://walkerke.github.io/tidycensus/reference/get_acs.html
+*https://walkerke.github.io/tidycensus/articles/spatial-data.html
+*https://walkerke.github.io/tidycensus/articles/other-datasets.html

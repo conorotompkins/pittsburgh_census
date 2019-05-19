@@ -152,7 +152,7 @@ allegheny %>%
 
 
 #WPRDC fire data
-```{r}
+```{r eval=FALSE, include=FALSE}
 pgh_fire_shp <- st_read("Allegheny_County_Census_Block_Groups_2016/Allegheny_County_Census_Block_Groups_2016.shp")
 
 pgh_fire_districts <- st_read("Fire_Districts/Fire_Districts.shp")
@@ -175,6 +175,28 @@ pgh_fire_shp %>%
 pgh_fire_districts %>% 
   ggplot() +
   geom_sf()
+```
+
+311 data
+```{r}
+df_311 <- read_csv("https://data.wprdc.org/datastore/dump/76fda9d0-69be-4dd5-8108-0de7907fc5a4")
+
+wards <- st_read("PGHWards/PGHWards.shp")
+
+wards %>% 
+  ggplot() +
+  geom_sf()
+
+df_311_count <- df_311 %>% 
+  count(WARD, sort = TRUE)
+
+ward_311 <- wards %>% 
+  left_join(df_311_count, by = c("ward" = "WARD"))
+
+ward_311 %>% 
+  ggplot(aes(fill = n)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c()
 ```
 
 

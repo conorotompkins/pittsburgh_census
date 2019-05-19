@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE)
 ```
 
+get your API key: https://api.census.gov/data/key_signup.html
+
 configure environment
 ```{r}
 library(tidycensus)
@@ -25,6 +27,7 @@ options(tigris_use_cache = TRUE)
 census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 ```
 
+
 load variables
 ```{r}
 variables_acs <- load_variables(2017, "acs5", cache = TRUE)
@@ -33,17 +36,54 @@ variables_acs
 
 variables_dec <- load_variables(2010, "sf1", cache = TRUE)
 ```
-
-load census block data for total pop
 ```{r}
+states <- get_decennial(geography = "state",
+                           variables = c(total_pop = "P001001"),
+                           #state = "PA", county = "Allegheny County",
+                           geometry = TRUE)
+
+states %>% 
+  filter(NAME != "Alaska",
+         NAME != "Hawaii") %>% 
+  ggplot(aes(fill = value)) +
+  geom_sf() +
+  scale_fill_viridis_c()
+```
+
+```{r}
+pennsylvania <- get_decennial(geography = "county",
+                           variables = c(total_pop = "P001001"),
+                           state = "PA",
+                           geometry = TRUE)
+
+pennsylvania %>% 
+  ggplot(aes(fill = value)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c()
+
+allegheny <- pennsylvania %>% 
+  filter(str_detect(NAME, "Allegheny"))
+
+
+pennsylvania %>% 
+  ggplot() +
+  geom_sf(aes(fill = value), color = NA) +
+  geom_sf(data = allegheny, color = "white", linetype = 2, size = 1, alpha = 0) +
+  scale_fill_viridis_c()
+```
+
+don't use
+load census block data for total pop
+```{r eval=FALSE, include=FALSE}
 allegheny <- get_decennial(geography = "block",
                            variables = c(total_pop = "P001001"),
                            state = "PA", county = "Allegheny County",
                            geometry = TRUE)
 ```
 
+don't use
 graph
-```{r}
+```{r eval=FALSE, include=FALSE}
 allegheny %>% 
   ggplot(aes(fill = value)) +
   geom_sf(color = NA) +
@@ -96,17 +136,45 @@ allegheny_erase %>%
   scale_fill_viridis_c()
 ```
 
-create df of census block geometry so we can join it with WPRDC data
+overlay [city boundaries](https://catalog.data.gov/dataset/pittsburgh-city-boundary-cbe8f) over same graph
 ```{r}
-allegheny <- get_decennial(geography = "block",
-                           variables = c(total_pop = "P001001"),
-                           state = "PA", county = "Allegheny County",
-                           geometry = TRUE)
+city_pgh <- st_read("Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp")
+
+allegheny %>% 
+  ggplot() +
+  geom_sf(aes(fill = pct), color = NA) +
+  geom_sf(data = city_pgh, color = "white", line_type = 2, size = 1, alpha = 0) +
+  facet_wrap(~variable) +
+  coord_sf(crs = 26915) + 
+  scale_fill_viridis_c()
+
 ```
 
-#join with WPRDC data
-```{r}
 
+#WPRDC fire data
+```{r}
+pgh_fire_shp <- st_read("Allegheny_County_Census_Block_Groups_2016/Allegheny_County_Census_Block_Groups_2016.shp")
+
+pgh_fire_districts <- st_read("Fire_Districts/Fire_Districts.shp")
+
+pgh_fire <- read_csv("911-fire-dispatches.csv", col_types = cols(.default = "c")) 
+  
+pgh_fire <- pgh_fire %>% 
+  count(GEOID, sort = TRUE) %>% 
+  filter(GEOID != "420034520001")
+
+pgh_fire_shp <- pgh_fire_shp %>% 
+  #semi_join(pgh_fire) %>% 
+  left_join(pgh_fire)
+
+pgh_fire_shp %>% 
+  ggplot() +
+  geom_sf(aes(fill = n), color = NA) +
+  scale_fill_viridis_c()
+
+pgh_fire_districts %>% 
+  ggplot() +
+  geom_sf()
 ```
 
 

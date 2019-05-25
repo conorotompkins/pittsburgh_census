@@ -207,6 +207,9 @@ ward_311 %>%
   ggplot(aes(fill = n)) +
   geom_sf(color = NA) +
   scale_fill_viridis_c("Number of 311 requests")
+
+
+#need to add section about finding center of each polygon and adding the label with geom_label
 ```
 
 ```{r}

@@ -9,9 +9,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE,
                       message = FALSE,
                       warning = FALSE)
+
+register_google(key = "AIzaSyBTJxUwvLUY3GiJgJ5cBSLEb_n1TPRjJPE")
 ```
 
-get your API key: https://api.census.gov/data/key_signup.html
+Get your census API key: https://api.census.gov/data/key_signup.html
 
 configure environment
 ```{r}
@@ -19,6 +21,8 @@ library(tidycensus)
 library(tidyverse)
 library(sf)
 library(tigris)
+library(lwgeom)
+library(ggmap)
 
 theme_set(theme_bw())
 
@@ -33,8 +37,11 @@ load variables
 variables_acs <- load_variables(2017, "acs5", cache = TRUE)
 
 variables_acs
-
+```
+```{r}
 variables_dec <- load_variables(2010, "sf1", cache = TRUE)
+
+variables_dec
 ```
 ```{r}
 states <- get_decennial(geography = "state",
@@ -54,20 +61,22 @@ states %>%
 pennsylvania <- get_decennial(geography = "county",
                            variables = c(total_pop = "P001001"),
                            state = "PA",
-                           geometry = TRUE)
+                           geometry = TRUE,
+                           output = "wide")
 
 pennsylvania %>% 
-  ggplot(aes(fill = value)) +
+  ggplot(aes(fill = total_pop)) +
   geom_sf(color = NA) +
   scale_fill_viridis_c()
+```
 
+```{r}
 allegheny <- pennsylvania %>% 
   filter(str_detect(NAME, "Allegheny"))
 
-
 pennsylvania %>% 
   ggplot() +
-  geom_sf(aes(fill = value), color = NA) +
+  geom_sf(aes(fill = total_pop), color = NA) +
   geom_sf(data = allegheny, color = "white", linetype = 2, size = 1, alpha = 0) +
   scale_fill_viridis_c()
 ```
@@ -98,6 +107,7 @@ racevars <- c(White = "P005003",
               Asian = "P005006", 
               Hispanic = "P004003")
 
+#note that this data is long, not wide
 allegheny <- get_decennial(geography = "tract", variables = racevars, 
                         state = "PA", county = "Allegheny County", geometry = TRUE,
                         summary_var = "P001001") 
@@ -125,7 +135,7 @@ st_erase <- function(x, y) {
 
 allegheny_water <- area_water("PA", "Allegheny County", class = "sf")
 
-allegheny_erase <- st_erase(allegheny, allegheny_water)
+allegheny_erase <- st_erase(st_make_valid(allegheny), st_make_valid(allegheny_water))
 ```
 ```{r}
 allegheny_erase %>% 
@@ -196,8 +206,22 @@ ward_311 <- wards %>%
 ward_311 %>% 
   ggplot(aes(fill = n)) +
   geom_sf(color = NA) +
-  scale_fill_viridis_c()
+  scale_fill_viridis_c("Number of 311 requests")
 ```
+
+```{r}
+
+pgh_map <- get_map(location = "Pittsburgh, PA", zoom = 12)
+
+ggmap(pgh_map) 
+
+ggmap(pgh_map) +
+  geom_sf(data = ward_311, aes(fill = n), inherit.aes = FALSE, color = NA, alpha = .7) +
+  coord_sf(crs = st_crs(4326)) +
+  scale_fill_viridis_c("Number of 311 requests")
+```
+
+`
 
 
 Links
@@ -206,3 +230,9 @@ Links
 *https://walkerke.github.io/tidycensus/reference/get_acs.html
 *https://walkerke.github.io/tidycensus/articles/spatial-data.html
 *https://walkerke.github.io/tidycensus/articles/other-datasets.html
+*https://cengel.github.io/R-spatial/mapping.html
+*https://www.r-spatial.org/r/2018/10/25/ggplot2-sf.html
+*https://www.r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+*https://www.r-spatial.org/r/2018/10/25/ggplot2-sf-3.html
+*google maps API key: https://cloud.google.com/maps-platform/
+*https://lucidmanager.org/geocoding-with-ggmap/

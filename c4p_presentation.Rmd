@@ -13,6 +13,14 @@ knitr::opts_chunk$set(echo = TRUE,
 register_google(key = "AIzaSyBTJxUwvLUY3GiJgJ5cBSLEb_n1TPRjJPE")
 ```
 
+#Packages
+##Simple Features {sf}
+
+##{tidycensus}
+
+##{ggmap}
+
+
 Get your census API key: https://api.census.gov/data/key_signup.html
 
 configure environment
@@ -23,6 +31,7 @@ library(sf)
 library(tigris)
 library(lwgeom)
 library(ggmap)
+library(janitor)
 
 theme_set(theme_bw())
 
@@ -135,9 +144,14 @@ st_erase <- function(x, y) {
 
 allegheny_water <- area_water("PA", "Allegheny County", class = "sf")
 
-allegheny_erase <- st_erase(st_make_valid(allegheny), st_make_valid(allegheny_water))
+allegheny %>% 
+  ggplot() +
+  geom_sf() +
+  geom_sf(data = allegheny_water, fill = "blue")
+
+allegheny_erase <- st_erase(allegheny, alegheny_water)
 ```
-```{r}
+```{r, eval=FALSE}
 allegheny_erase %>% 
   ggplot(aes(fill = pct)) +
   geom_sf(color = NA) +
@@ -188,6 +202,7 @@ pgh_fire_districts %>%
 ```
 
 311 data
+[pittsburgh wards](https://catalog.data.gov/dataset/pittsburgh-wards)
 ```{r}
 df_311 <- read_csv("https://data.wprdc.org/datastore/dump/76fda9d0-69be-4dd5-8108-0de7907fc5a4")
 
@@ -197,23 +212,27 @@ wards %>%
   ggplot() +
   geom_sf()
 
+ward_labels <- wards %>% 
+  st_centroid() %>% 
+  st_coordinates() %>% 
+  as_tibble() %>% 
+  clean_names()
+
 df_311_count <- df_311 %>% 
   count(WARD, sort = TRUE)
 
 ward_311 <- wards %>% 
-  left_join(df_311_count, by = c("ward" = "WARD"))
+  left_join(df_311_count, by = c("ward" = "WARD")) %>%
+  bind_cols(ward_labels)
 
 ward_311 %>% 
-  ggplot(aes(fill = n)) +
-  geom_sf(color = NA) +
+  ggplot() +
+  geom_sf(aes(fill = n), color = NA) +
+  geom_label(aes(x, y, label = ward), size = 3) +
   scale_fill_viridis_c("Number of 311 requests")
-
-
-#need to add section about finding center of each polygon and adding the label with geom_label
 ```
 
 ```{r}
-
 pgh_map <- get_map(location = "Pittsburgh, PA", zoom = 12)
 
 ggmap(pgh_map) 
@@ -224,10 +243,7 @@ ggmap(pgh_map) +
   scale_fill_viridis_c("Number of 311 requests")
 ```
 
-`
-
-
-Links
+##Links
 
 *https://walkerke.github.io/tidycensus/articles/basic-usage.html
 *https://walkerke.github.io/tidycensus/reference/get_acs.html

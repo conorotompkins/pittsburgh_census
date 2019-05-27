@@ -14,11 +14,10 @@ register_google(key = "AIzaSyBTJxUwvLUY3GiJgJ5cBSLEb_n1TPRjJPE")
 ```
 
 #Packages
-##Simple Features {sf}
 
-##{tidycensus}
-
-##{ggmap}
+* Simple Features {sf}
+* {tidycensus}
+* {ggmap}
 
 
 Get your census API key: https://api.census.gov/data/key_signup.html
@@ -35,37 +34,77 @@ library(janitor)
 
 theme_set(theme_bw())
 
-options(tigris_use_cache = TRUE)
+options(tigris_use_cache = TRUE,
+        scipen = 4,
+        digits = 3)
 
 census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
+
+
 ```
 
+```{r include=FALSE}
+library(kableExtra)
+```
 
-load variables
+##{tidycensus}
+gives access to census API. makes it easy to plot data on a map
+
+Data
+* census demographics
+  * decennial
+  * American Community Survey
+* census geometries
+  * country
+  * county
+  * zip code
+  * blocks
+  * tracts
+
+
+##{sf}
+simple features makes it easy to work with polygon data in R. uses familiar `tidyverse` framework
+
+##{ggmap}
+Uses Google Maps API to get basemaps
+
+
+##Using `tidycensus`
+Load variables
 ```{r}
 variables_acs <- load_variables(2017, "acs5", cache = TRUE)
 
-variables_acs
+variables_acs %>% 
+  head(5) %>% 
+  kable() %>% 
+  kable_styling()
 ```
 ```{r}
 variables_dec <- load_variables(2010, "sf1", cache = TRUE)
 
-variables_dec
+variables_dec %>% 
+  head(5) %>% 
+  kable() %>% 
+  kable_styling()
 ```
+
+Plot the total population of continental U.S. states
 ```{r}
 states <- get_decennial(geography = "state",
                            variables = c(total_pop = "P001001"),
-                           #state = "PA", county = "Allegheny County",
-                           geometry = TRUE)
+                           geometry = TRUE,
+                        output = "wide")
 
 states %>% 
   filter(NAME != "Alaska",
-         NAME != "Hawaii") %>% 
-  ggplot(aes(fill = value)) +
+         NAME != "Hawaii",
+         !str_detect(NAME, "Puerto")) %>% 
+  ggplot(aes(fill = total_pop)) +
   geom_sf() +
-  scale_fill_viridis_c()
+  scale_fill_viridis_c("Total Population")
 ```
 
+Plot the total population of each county in PA
 ```{r}
 pennsylvania <- get_decennial(geography = "county",
                            variables = c(total_pop = "P001001"),
@@ -79,6 +118,7 @@ pennsylvania %>%
   scale_fill_viridis_c()
 ```
 
+Highlight Allegheny County
 ```{r}
 allegheny <- pennsylvania %>% 
   filter(str_detect(NAME, "Allegheny"))
@@ -109,7 +149,9 @@ allegheny %>%
   scale_fill_viridis_c("Total Population")
 ```
 
-download demographic data for census blocks
+Download demographic data for census blocks
+
+Set the variables we want to use first
 ```{r}
 racevars <- c(White = "P005003", 
               Black = "P005004", 
@@ -121,6 +163,8 @@ allegheny <- get_decennial(geography = "tract", variables = racevars,
                         state = "PA", county = "Allegheny County", geometry = TRUE,
                         summary_var = "P001001") 
 ```
+
+Calculate as a percentage of tract population
 ```{r}
 allegheny <- allegheny %>% 
   mutate(pct = 100 * value / summary_value)
@@ -132,7 +176,7 @@ allegheny %>%
   ggplot(aes(fill = pct)) +
   geom_sf(color = NA) +
   facet_wrap(~variable) +
-  coord_sf(crs = 26915) + 
+  #coord_sf(crs = 26915) + 
   scale_fill_viridis_c()
 ```
 
@@ -149,7 +193,7 @@ allegheny %>%
   geom_sf() +
   geom_sf(data = allegheny_water, fill = "blue")
 
-allegheny_erase <- st_erase(allegheny, alegheny_water)
+#allegheny_erase <- st_erase(allegheny, allegheny_water)
 ```
 ```{r, eval=FALSE}
 allegheny_erase %>% 
@@ -160,7 +204,9 @@ allegheny_erase %>%
   scale_fill_viridis_c()
 ```
 
-overlay [city boundaries](https://catalog.data.gov/dataset/pittsburgh-city-boundary-cbe8f) over same graph
+We can overlay the boundaries of Pittsburgh over the same graph.
+
+Download the [boundary shapefile](https://catalog.data.gov/dataset/pittsburgh-city-boundary-cbe8f) and use `sf::st_read` to read it into R
 ```{r}
 city_pgh <- st_read("Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp")
 
@@ -168,12 +214,9 @@ allegheny %>%
   ggplot() +
   geom_sf(aes(fill = pct), color = NA) +
   geom_sf(data = city_pgh, color = "white", line_type = 2, size = 1, alpha = 0) +
-  facet_wrap(~variable) +
-  coord_sf(crs = 26915) + 
+  facet_wrap(~variable) + 
   scale_fill_viridis_c()
-
 ```
-
 
 #WPRDC fire data
 ```{r eval=FALSE, include=FALSE}
@@ -201,8 +244,7 @@ pgh_fire_districts %>%
   geom_sf()
 ```
 
-311 data
-[pittsburgh wards](https://catalog.data.gov/dataset/pittsburgh-wards)
+We can also download the shapefile for the [City of Pittsburgh wards](https://catalog.data.gov/dataset/pittsburgh-wards). The [311 dataset](https://data.wprdc.org/dataset/311-data/resource/76fda9d0-69be-4dd5-8108-0de7907fc5a4) is tagged with the ward the request originated from, so we can use that to aggregate and map the total number of 311 calls per ward.
 ```{r}
 df_311 <- read_csv("https://data.wprdc.org/datastore/dump/76fda9d0-69be-4dd5-8108-0de7907fc5a4")
 
@@ -211,20 +253,33 @@ wards <- st_read("PGHWards/PGHWards.shp")
 wards %>% 
   ggplot() +
   geom_sf()
-
+```
+Calculate the center of each ward. We will use this to label the wards on the map:
+```{r}
 ward_labels <- wards %>% 
   st_centroid() %>% 
   st_coordinates() %>% 
   as_tibble() %>% 
   clean_names()
 
+ward_labels %>% 
+  head(5) %>%
+  kable() %>% 
+  kable_styling()
+```
+Count the number of requests per ward:
+```{r}
 df_311_count <- df_311 %>% 
   count(WARD, sort = TRUE)
-
+```
+Join the count data with the coordinates:
+```{r}
 ward_311 <- wards %>% 
   left_join(df_311_count, by = c("ward" = "WARD")) %>%
   bind_cols(ward_labels)
-
+```
+Plot the data:
+```{r}
 ward_311 %>% 
   ggplot() +
   geom_sf(aes(fill = n), color = NA) +
@@ -232,13 +287,22 @@ ward_311 %>%
   scale_fill_viridis_c("Number of 311 requests")
 ```
 
+We can use `ggmap` to request a basemap from the Google Maps API.
+Get your API key [here](https://cloud.google.com/maps-platform/)
+```{r include=FALSE}
+register_google(key = "Your key here")
+```
 ```{r}
 pgh_map <- get_map(location = "Pittsburgh, PA", zoom = 12)
 
-ggmap(pgh_map) 
+ggmap(pgh_map)
+```
 
+This combination requires a certain map projection. Use `coord_sf` to set the projection.
+```{r}
 ggmap(pgh_map) +
   geom_sf(data = ward_311, aes(fill = n), inherit.aes = FALSE, color = NA, alpha = .7) +
+  geom_label(data = ward_311, aes(x, y, label = ward), size = 3) +
   coord_sf(crs = st_crs(4326)) +
   scale_fill_viridis_c("Number of 311 requests")
 ```

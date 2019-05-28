@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Packages
 
-* Simple Features {sf}
+* {sf} Simple Features
 * {tidycensus}
 * {ggmap}
 
@@ -25,7 +25,7 @@ library(tidycensus)
 library(tidyverse)
 library(sf)
 library(tigris)
-library(lwgeom)
+#library(lwgeom)
 library(ggmap)
 library(janitor)
 
@@ -42,6 +42,8 @@ census_api_key("a16f3636406d2b544871e2ae49bb318c3ddcacba")
 register_google(key = "AIzaSyBTJxUwvLUY3GiJgJ5cBSLEb_n1TPRjJPE")
 ```
 
+Before we dive in, this presentation assumes that the user has basic familiarity with `tidyverse`, mainly `dplyr`. Knowing how to use `%>%` will be very helpful. 
+
 ### {tidycensus}
 
 [`tidycensus`](https://walkerke.github.io/tidycensus/) gives access to census API and makes it easy to plot data on a map.
@@ -51,6 +53,7 @@ Data
 * Demographics
   * Decennial Census
   * American Community Survey (ACS)
+  * error estimates
 * Geometries
   * country
   * county
@@ -61,7 +64,7 @@ Data
 
 ### {sf}
 
-[simple features](https://r-spatial.github.io/sf/articles/sf1.html) makes it easy to work with polygon data in R. It uses familiar the `tidyverse` framework: everything is a tibble, and it uses `%>%`
+[simple features](https://r-spatial.github.io/sf/articles/sf1.html) makes it easy to work with polygon data in R. It uses familiar the `tidyverse` framework: everything is a tibble, and it uses `%>%`.
 
 ### {ggmap}
 
@@ -70,9 +73,9 @@ Uses [Google Maps API](https://cloud.google.com/maps-platform/) to get basemaps.
 
 #### Using {tidycensus}
 
-Load ACS variables:
+This loads the ACS variables for 2017:
 ```{r}
-variables_acs <- load_variables(2017, "acs5", cache = TRUE)
+variables_acs <- load_variables(year = 2017, dataset = "acs5", cache = TRUE)
 ```
 ```{r echo=FALSE}
 variables_acs %>% 
@@ -80,9 +83,9 @@ variables_acs %>%
   kable() %>% 
   kable_styling()
 ```
-Load Decennial Census data:
+This loads the variables from the Decennial Census in 2010:
 ```{r}
-variables_dec <- load_variables(2010, "sf1", cache = TRUE)
+variables_dec <- load_variables(year = 2010, dataset = "sf1", cache = TRUE)
 ```
 ```{r echo=FALSE}
 variables_dec %>% 
@@ -91,19 +94,20 @@ variables_dec %>%
   kable_styling()
 ```
 
-Plot the total population of the continental U.S. states:
+Query the total population of the continental U.S. states:
 ```{r}
 states <- get_decennial(geography = "state",
-                           variables = c(total_pop = "P001001"),
-                           geometry = TRUE,
+                        variables = c(total_pop = "P001001"),
+                        geometry = TRUE,
                         output = "wide")
 ```
 
-Examine the `states` tibble:
+The `states` tibble contains the census data and the polygons for the geometries.
 ```{r echo=FALSE}
 states
 ```
 
+Plot the data:
 ```{r}
 states %>% 
   filter(NAME != "Alaska",
@@ -114,7 +118,7 @@ states %>%
   scale_fill_viridis_c("Total Population")
 ```
 
-Plot the total population of each county in PA:
+Pull the total population of each county in PA and plot it:
 ```{r}
 pennsylvania <- get_decennial(geography = "county",
                            variables = c(total_pop = "P001001"),
@@ -128,7 +132,7 @@ pennsylvania %>%
   scale_fill_viridis_c()
 ```
 
-Highlight Allegheny County:
+We can stack multiple polygons in the same graph to highlight Allegheny County:
 ```{r}
 allegheny <- pennsylvania %>% 
   filter(str_detect(NAME, "Allegheny"))
@@ -173,11 +177,13 @@ allegheny <- get_decennial(geography = "tract", variables = racevars,
                         state = "PA", county = "Allegheny County", geometry = TRUE,
                         summary_var = "P001001") 
 ```
+
 Calculate as a percentage of tract population:
 ```{r}
 allegheny <- allegheny %>% 
   mutate(pct = 100 * value / summary_value)
 ```
+
 Facet by `variable` and map the data:
 ```{r}
 allegheny %>% 
@@ -215,7 +221,7 @@ We can overlay the boundaries of Pittsburgh over the same graph.
 
 Download the [boundary shapefile](https://catalog.data.gov/dataset/pittsburgh-city-boundary-cbe8f) and use `sf::st_read` to read it into R:
 ```{r}
-city_pgh <- st_read("Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp")
+city_pgh <- st_read("data/Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp")
 
 allegheny %>% 
   ggplot() +
@@ -227,7 +233,7 @@ allegheny %>%
 
 WPRDC fire data
 ```{r eval=FALSE, include=FALSE}
-pgh_fire_shp <- st_read("Allegheny_County_Census_Block_Groups_2016/Allegheny_County_Census_Block_Groups_2016.shp")
+pgh_fire_shp <- st_read("data/Allegheny_County_Census_Block_Groups_2016/Allegheny_County_Census_Block_Groups_2016.shp")
 
 pgh_fire_districts <- st_read("Fire_Districts/Fire_Districts.shp")
 
@@ -255,9 +261,22 @@ pgh_fire_districts %>%
 We can also download the shapefile for the [City of Pittsburgh wards](https://catalog.data.gov/dataset/pittsburgh-wards). The [311 dataset](https://data.wprdc.org/dataset/311-data/resource/76fda9d0-69be-4dd5-8108-0de7907fc5a4) is tagged with the ward the request originated from, so we can use that to aggregate and map the total number of 311 requests per ward.
 ```{r}
 df_311 <- read_csv("https://data.wprdc.org/datastore/dump/76fda9d0-69be-4dd5-8108-0de7907fc5a4")
+```
+```{r echo=FALSE}
+df_311 %>% 
+  head(10) %>% 
+  kable() %>% 
+  kable_styling()
+```
+```{r}
+wards <- st_read("data/PGHWards/PGHWards.shp")
+```
+```{r echo=FALSE}
+wards
+```
 
-wards <- st_read("PGHWards/PGHWards.shp")
-
+Plot the ward polygons:
+```{r}
 wards %>% 
   ggplot() +
   geom_sf()
@@ -312,6 +331,24 @@ pgh_map <- get_map(location = "Pittsburgh, PA", zoom = 12)
 ggmap(pgh_map)
 ```
 
+There are multiple basemap styles available:
+```{r}
+get_map(location = "Pittsburgh, PA", zoom = 12, maptype = "satellite", source = "google") %>% 
+  ggmap()
+```
+```{r}
+get_map(location = "Pittsburgh, PA", zoom = 12, maptype = "roadmap", source = "google") %>% 
+  ggmap()
+```
+```{r}
+get_map(location = "Pittsburgh, PA", zoom = 12, maptype = "watercolor", source = "google") %>% 
+  ggmap()
+```
+```{r}
+get_map(location = "Pittsburgh, PA", zoom = 12, maptype = "toner", source = "stamen") %>% 
+  ggmap()
+```
+
 Combining maps from different systems requires us to use the same map projection. Use `coord_sf` to set the projection:
 ```{r}
 ggmap(pgh_map) +
@@ -333,3 +370,4 @@ ggmap(pgh_map) +
 * https://www.r-spatial.org/r/2018/10/25/ggplot2-sf-3.html
 * google maps API key: https://cloud.google.com/maps-platform/
 * https://lucidmanager.org/geocoding-with-ggmap/
+* https://github.com/rstudio/cheatsheets/blob/master/sf.pdf

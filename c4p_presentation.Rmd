@@ -1,7 +1,7 @@
 ---
-title: "C4P Presentation"
+title: "Map Census Data with R!"
 author: "Conor Tompkins"
-date: "April 13, 2019"
+date: "May 30, 2019"
 output: html_document
 ---
 
@@ -25,7 +25,6 @@ library(tidycensus)
 library(tidyverse)
 library(sf)
 library(tigris)
-#library(lwgeom)
 library(ggmap)
 library(janitor)
 
@@ -69,22 +68,26 @@ Data
 
 `ggplot2::geom_sf()` makes it easy to plot `sf` polygons.
 
+`sf` can also do spatial calculations such as `st_contains`, `st_intersects`, and `st_boundary`.
+
 ### {ggmap}
 
 Uses [Google Maps API](https://cloud.google.com/maps-platform/) to get basemaps.
+The API now requires a credit card, but it has a fairly generous "free" tier.
 
 
 ## Using {tidycensus}
+
+```{r eval = FALSE}
+census_api_key("your_key_here")
+```
 
 This loads the variables from the Decennial Census in 2010:
 ```{r}
 variables_dec <- load_variables(year = 2010, dataset = "sf1", cache = TRUE)
 ```
 ```{r echo=FALSE}
-variables_dec %>% 
-  head(5) %>% 
-  kable() %>% 
-  kable_styling()
+variables_dec
 ```
 
 This loads the ACS variables for 2017:
@@ -92,10 +95,7 @@ This loads the ACS variables for 2017:
 variables_acs <- load_variables(year = 2017, dataset = "acs5", cache = TRUE)
 ```
 ```{r echo=FALSE}
-variables_acs %>% 
-  head(5) %>% 
-  kable() %>% 
-  kable_styling()
+variables_acs
 ```
 
 Query the total population of the continental U.S. states:
@@ -116,8 +116,8 @@ Make a bar graph with the data:
 states %>% 
   mutate(NAME = fct_reorder(NAME, total_pop)) %>% 
   ggplot(aes(NAME, total_pop)) +
-  geom_col() +
-  coord_flip()
+    geom_col() +
+    coord_flip()
 ```
 
 Plot the same data on a map:
@@ -127,7 +127,7 @@ states %>%
          NAME != "Hawaii",
          !str_detect(NAME, "Puerto")) %>% 
   ggplot(aes(fill = total_pop)) +
-    geom_sf(color = NA) +
+    geom_sf() +
     scale_fill_viridis_c("Total Population")
 ```
 
@@ -141,18 +141,18 @@ pennsylvania <- get_decennial(geography = "county",
 
 pennsylvania %>% 
   ggplot(aes(fill = total_pop)) +
-  geom_sf(color = NA) +
-  scale_fill_viridis_c()
+    geom_sf() +
+    scale_fill_viridis_c()
 ```
 
-ggplo2 intelligently handles cases when we don't have data for a certain polygon:
+`ggplot2` intelligently handles cases when we don't have data for a certain polygon:
 ```{r}
 pennsylvania %>% 
   mutate(total_pop = case_when(NAME == "Allegheny County, Pennsylvania" ~ NA_real_,
                                NAME != "Allegheny County, Pennsylvania" ~ total_pop)) %>% 
   ggplot(aes(fill = total_pop)) +
-  geom_sf(color = NA) +
-  scale_fill_viridis_c()
+    geom_sf() +
+    scale_fill_viridis_c()
 ```
 
 We can stack multiple polygons in the same graph to highlight Allegheny County:
@@ -162,28 +162,9 @@ allegheny <- pennsylvania %>%
 
 pennsylvania %>% 
   ggplot() +
-  geom_sf(aes(fill = total_pop), color = NA) +
-  geom_sf(data = allegheny, color = "white", linetype = 2, size = 1, alpha = 0) +
-  scale_fill_viridis_c()
-```
-
-don't use
-load census block data for total pop
-```{r eval=FALSE, include=FALSE}
-allegheny <- get_decennial(geography = "block",
-                           variables = c(total_pop = "P001001"),
-                           state = "PA", county = "Allegheny County",
-                           geometry = TRUE)
-```
-
-don't use
-graph
-```{r eval=FALSE, include=FALSE}
-allegheny %>% 
-  ggplot(aes(fill = value)) +
-  geom_sf(color = NA) +
-  coord_sf(crs = 26915) + 
-  scale_fill_viridis_c("Total Population")
+    geom_sf(aes(fill = total_pop)) +
+    geom_sf(data = allegheny, color = "white", linetype = 2, size = 1, alpha = 0) +
+    scale_fill_viridis_c()
 ```
 
 We can also use `tidycensus` to download demographic data for census tracts.
@@ -211,33 +192,9 @@ Facet by `variable` and map the data:
 ```{r}
 allegheny %>% 
   ggplot(aes(fill = pct)) +
-  geom_sf(color = NA) +
-  facet_wrap(~variable) +
-  scale_fill_viridis_c()
-```
-
-make rivers show up
-```{r}
-st_erase <- function(x, y) {
-  st_difference(x, st_union(st_combine(y)))
-}
-
-allegheny_water <- area_water("PA", "Allegheny County", class = "sf")
-
-allegheny %>% 
-  ggplot() +
-  geom_sf() +
-  geom_sf(data = allegheny_water, fill = "blue")
-
-#allegheny_erase <- st_erase(allegheny, allegheny_water)
-```
-```{r eval=FALSE, include=FALSE}
-allegheny_erase %>% 
-  ggplot(aes(fill = pct)) +
-  geom_sf(color = NA) +
-  facet_wrap(~variable) +
-  coord_sf(crs = 26915) + 
-  scale_fill_viridis_c()
+    geom_sf(color = NA) +
+    facet_wrap(~variable) +
+    scale_fill_viridis_c()
 ```
 
 We can overlay the boundaries of Pittsburgh over the same graph.
@@ -248,51 +205,28 @@ city_pgh <- st_read("data/Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp"
 
 allegheny %>% 
   ggplot() +
-  geom_sf(aes(fill = pct), color = NA) +
-  geom_sf(data = city_pgh, color = "white", line_type = 2, size = 1, alpha = 0) +
-  facet_wrap(~variable) + 
-  scale_fill_viridis_c()
+    geom_sf(aes(fill = pct), color = NA) +
+    geom_sf(data = city_pgh, color = "white", line_type = 2, size = 1, alpha = 0) +
+    facet_wrap(~variable) + 
+    scale_fill_viridis_c()
 ```
 
-WPRDC fire data
-```{r eval=FALSE, include=FALSE}
-pgh_fire_shp <- st_read("data/Allegheny_County_Census_Block_Groups_2016/Allegheny_County_Census_Block_Groups_2016.shp")
+### Working with other data
 
-pgh_fire_districts <- st_read("Fire_Districts/Fire_Districts.shp")
-
-pgh_fire <- read_csv("911-fire-dispatches.csv", col_types = cols(.default = "c")) 
-  
-pgh_fire <- pgh_fire %>% 
-  count(GEOID, sort = TRUE) %>% 
-  filter(GEOID != "420034520001")
-
-pgh_fire_shp <- pgh_fire_shp %>% 
-  #semi_join(pgh_fire) %>% 
-  left_join(pgh_fire)
-
-pgh_fire_shp %>% 
-  ggplot() +
-  geom_sf(aes(fill = n), color = NA) +
-  scale_fill_viridis_c()
-
-pgh_fire_districts %>% 
-  ggplot() +
-  geom_sf()
-```
-
-#### 311 data and city wards
+#### WPRDC 311 data and city wards
 We can also download the shapefile for the [City of Pittsburgh wards](https://catalog.data.gov/dataset/pittsburgh-wards). The [311 dataset](https://data.wprdc.org/dataset/311-data/resource/76fda9d0-69be-4dd5-8108-0de7907fc5a4) is tagged with the ward the request originated from, so we can use that to aggregate and map the total number of 311 requests per ward.
 ```{r}
 df_311 <- read_csv("https://data.wprdc.org/datastore/dump/76fda9d0-69be-4dd5-8108-0de7907fc5a4") %>% 
   clean_names()
 ```
-```{r echo=FALSE}
+```{r message=FALSE}
 df_311 %>% 
+  select(request_id:ward) %>% 
   head(10) %>% 
   kable() %>% 
   kable_styling()
 ```
-```{r}
+```{r include=FALSE}
 wards <- st_read("data/PGHWards/PGHWards.shp") %>% 
   clean_names()
 ```

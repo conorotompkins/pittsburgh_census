@@ -1,8 +1,10 @@
 ---
-title: "Map Census Data with R!"
-author: "Conor Tompkins"
-date: "May 30, 2019"
-output: html_document
+title: Map Census Data with R!
+author: Conor Tompkins
+date: '2019-05-28'
+slug: map-census-data-with-r
+categories: []
+tags: []
 ---
 
 ```{r setup, include=FALSE}
@@ -98,6 +100,17 @@ variables_acs <- load_variables(year = 2017, dataset = "acs5", cache = TRUE)
 variables_acs
 ```
 
+### Map total population in the U.S.
+
+Use `View()` to browse the variables
+```{r eval = FALSE}
+variables_dec %>% 
+  filter(str_detect(concept, "POPULATION")) %>% 
+  View()
+```
+
+`P001001` has the data we are looking for.
+
 Query the total population of the continental U.S. states:
 ```{r}
 states <- get_decennial(geography = "state",
@@ -138,7 +151,6 @@ pennsylvania <- get_decennial(geography = "county",
                            state = "PA",
                            geometry = TRUE,
                            output = "wide")
-
 pennsylvania %>% 
   ggplot(aes(fill = total_pop)) +
     geom_sf() +
@@ -175,7 +187,6 @@ racevars <- c(White = "P005003",
               Black = "P005004", 
               Asian = "P005006", 
               Hispanic = "P004003")
-
 #note that this data is long, not wide
 allegheny <- get_decennial(geography = "tract", variables = racevars, 
                         state = "PA", county = "Allegheny County", geometry = TRUE,
@@ -255,11 +266,13 @@ ward_labels %>%
   kable() %>% 
   kable_styling()
 ```
+
 Count the number of requests per ward:
 ```{r}
 df_311_count <- df_311 %>% 
   count(ward, sort = TRUE)
 ```
+
 Use `left_join` and `bind_cols` to join the count data with the coordinates:
 ```{r}
 ward_311 <- wards %>% 
@@ -269,14 +282,65 @@ ward_311 <- wards %>%
 ```{r echo=FALSE}
 ward_311
 ```
+
 Plot the data:
 ```{r}
 ward_311 %>% 
   ggplot() +
-  geom_sf(aes(fill = n), color = NA) +
-  geom_label(aes(x, y, label = ward), size = 3) +
-  scale_fill_viridis_c("Number of 311 requests")
+    geom_sf(aes(fill = n), color = NA) +
+    geom_label(aes(x, y, label = ward), size = 3) +
+    scale_fill_viridis_c("Number of 311 requests")
 ```
+
+#### WPRDC overdose data
+
+We can use the census data to adjust other data for per capita rates. For example, the WPRDC's [overdose data](https://data.wprdc.org/dataset/allegheny-county-fatal-accidental-overdoses) has the zip code that the overdose occurred in.
+
+First, download the overdose dataset and pull the population data for each zip code:
+```{r}
+df_overdose <- read_csv("https://data.wprdc.org/datastore/dump/1c59b26a-1684-4bfb-92f7-205b947530cf") %>% 
+  clean_names() %>% 
+  mutate(incident_zip = str_sub(incident_zip, 1, 5))
+
+all_zips <- get_acs(geography = "zip code tabulation area",
+                          variables = c(total_pop = "B01003_001"),
+                          geometry = TRUE,
+                    output = "wide")
+```
+
+Then, aggregate the overdose data to the zip code and join the datasets
+```{r}
+df_overdose <- df_overdose %>% 
+  count(incident_zip, sort = TRUE)
+
+attempt1 <- all_zips %>%
+  semi_join(df_overdose, by = c("GEOID" = "incident_zip")) %>% 
+  left_join(df_overdose, by = c("GEOID" = "incident_zip"))
+
+attempt1 %>% 
+  ggplot() +
+  geom_sf()
+```
+
+Unfortunately the data is kind of messy and includes zip codes that aren't in Allegheny County.
+
+We can use `st_intersection` to exclude all of the zip code polygons that do not fall within the `allegheny` county tibble we made earlier. Then, join the aggregated overdose data with `left_join`:
+```{r}
+df_allegheny_overdose <- st_intersection(allegheny, all_zips) %>% 
+  left_join(df_overdose, by = c("GEOID.1" = "incident_zip"))
+```
+
+Now we can calculate the per 1,000 overdose rate and plot the data:
+```{r}
+df_allegheny_overdose %>% 
+  filter(total_popE >= 400) %>% 
+  mutate(overdoses_per_capita = n / total_popE * 1000) %>% 
+  ggplot(aes(fill = overdoses_per_capita)) +
+    geom_sf(color = NA) +
+    scale_fill_viridis_c()
+```
+
+### {ggmap} basemaps
 
 We can use `ggmap` to request a basemap from the Google Maps API.
 Get your API key [here](https://cloud.google.com/maps-platform/)

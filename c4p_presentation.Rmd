@@ -66,7 +66,7 @@ Data
 
 ### {sf}
 
-[simple features](https://r-spatial.github.io/sf/articles/sf1.html) makes it easy to work with polygon data in R. It uses familiar the `tidyverse` framework: everything is a tibble, and it uses `%>%`.
+[simple features](https://r-spatial.github.io/sf/articles/sf1.html) makes it easy to work with polygon data in R. It uses the familiar `tidyverse` framework: everything is a tibble, and it uses `%>%`.
 
 `ggplot2::geom_sf()` makes it easy to plot `sf` polygons.
 
@@ -253,7 +253,7 @@ wards %>%
 ```
 
 Calculate the center of each ward. We will use this to label the wards on the map:
-```{r echo=FALSE}
+```{r}
 ward_labels <- wards %>% 
   st_centroid() %>% 
   st_coordinates() %>% 

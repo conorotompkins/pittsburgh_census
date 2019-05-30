@@ -188,20 +188,20 @@ racevars <- c(White = "P005003",
               Asian = "P005006", 
               Hispanic = "P004003")
 #note that this data is long, not wide
-allegheny <- get_decennial(geography = "tract", variables = racevars, 
+allegheny_tracts <- get_decennial(geography = "tract", variables = racevars, 
                         state = "PA", county = "Allegheny County", geometry = TRUE,
                         summary_var = "P001001") 
 ```
 
 Calculate as a percentage of tract population:
 ```{r}
-allegheny <- allegheny %>% 
+allegheny_tracts <- allegheny_tracts %>% 
   mutate(pct = 100 * value / summary_value)
 ```
 
 Facet by `variable` and map the data:
 ```{r}
-allegheny %>% 
+allegheny_tracts %>% 
   ggplot(aes(fill = pct)) +
     geom_sf(color = NA) +
     facet_wrap(~variable) +
@@ -214,7 +214,7 @@ Download the [boundary shapefile](https://catalog.data.gov/dataset/pittsburgh-ci
 ```{r}
 city_pgh <- st_read("data/Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp")
 
-allegheny %>% 
+allegheny_tracts %>% 
   ggplot() +
     geom_sf(aes(fill = pct), color = NA) +
     geom_sf(data = city_pgh, color = "white", line_type = 2, size = 1, alpha = 0) +
@@ -230,7 +230,7 @@ We can also download the shapefile for the [City of Pittsburgh wards](https://ca
 df_311 <- read_csv("https://data.wprdc.org/datastore/dump/76fda9d0-69be-4dd5-8108-0de7907fc5a4") %>% 
   clean_names()
 ```
-```{r message=FALSE}
+```{r echo=FALSE, message=FALSE}
 df_311 %>% 
   select(request_id:ward) %>% 
   head(10) %>% 
@@ -253,7 +253,7 @@ wards %>%
 ```
 
 Calculate the center of each ward. We will use this to label the wards on the map:
-```{r}
+```{r echo=FALSE}
 ward_labels <- wards %>% 
   st_centroid() %>% 
   st_coordinates() %>% 
@@ -303,12 +303,12 @@ df_overdose <- read_csv("https://data.wprdc.org/datastore/dump/1c59b26a-1684-4bf
   mutate(incident_zip = str_sub(incident_zip, 1, 5))
 
 all_zips <- get_acs(geography = "zip code tabulation area",
-                          variables = c(total_pop = "B01003_001"),
-                          geometry = TRUE,
+                    variables = c(total_pop = "B01003_001"),
+                    geometry = TRUE,
                     output = "wide")
 ```
 
-Then, aggregate the overdose data to the zip code and join the datasets
+Then, aggregate the overdose data to the zip code and join the datasets:
 ```{r}
 df_overdose <- df_overdose %>% 
   count(incident_zip, sort = TRUE)
@@ -319,12 +319,19 @@ attempt1 <- all_zips %>%
 
 attempt1 %>% 
   ggplot() +
-  geom_sf()
+    geom_sf()
 ```
 
 Unfortunately the data is kind of messy and includes zip codes that aren't in Allegheny County.
 
-We can use `st_intersection` to exclude all of the zip code polygons that do not fall within the `allegheny` county tibble we made earlier. Then, join the aggregated overdose data with `left_join`:
+We can use `st_intersection` to exclude all of the zip code polygons that do not fall within the `allegheny` county tibble we made earlier:
+```{r}
+allegheny %>% 
+  ggplot() +
+    geom_sf()
+```
+
+Then, join the aggregated overdose data with `left_join`:
 ```{r}
 df_allegheny_overdose <- st_intersection(allegheny, all_zips) %>% 
   left_join(df_overdose, by = c("GEOID.1" = "incident_zip"))

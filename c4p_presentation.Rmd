@@ -217,7 +217,7 @@ city_pgh <- st_read("data/Pittsburgh_City_Boundary/Pittsburgh_City_Boundary.shp"
 allegheny_tracts %>% 
   ggplot() +
     geom_sf(aes(fill = pct), color = NA) +
-    geom_sf(data = city_pgh, color = "white", line_type = 2, size = 1, alpha = 0) +
+    geom_sf(data = city_pgh, color = "white", linetype = 2, size = 1, alpha = 0) +
     facet_wrap(~variable) + 
     scale_fill_viridis_c()
 ```
